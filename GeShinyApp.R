@@ -4,6 +4,8 @@ library(shinythemes)
 library(plotly)
 
 
+load("data.RDA")
+
 #list of all variables
 nms <- names(final_data)
 

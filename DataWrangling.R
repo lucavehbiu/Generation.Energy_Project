@@ -1,3 +1,7 @@
+#~Final project | Ubiqum + Generation.Energy 
+#~March 2019 | Luca Vehbiu
+
+#Load libraries
 require(rio)
 require(dplyr)
 require(ggplot2)
@@ -6,18 +10,37 @@ require(data.table)
 require(scales)
 require(grid)
 require(gridExtra)
+require(sf)
+require(rgdal)
+require(maptools)
+require(ggmap)
+require(spdep)
+require(rgeos)
+require(raster)
+require(sp)
+require(plotrix) #have not used p_load - fear of failure when deployed
 
 #Read and load the necessary data
 data <- import("180320_Klimaatmonitor_Energieverbruik_berekeningsmap_herindelingenmap_jtv.xlsx", 
-               sheet = 'TOTALEN_TJ')
-new_data <- read_csv("new_data.csv")
+               sheet = 'TOTALEN_TJ') 
+#big spreadsheet with energy potential demand projections (2015-2050)
 
-load("bashk.RDA")   #AOprojections
-load("bashkNB.RDA") #NB projections
-load("fundi.RDA")   #un-gathered final data
-load('data.RDA')    #gather final data
+new_data <- read_csv("new_data.csv") 
+#data frame with regions, shape_area and updated geementes (2019)
 
-#Past wrangling
+#load save RDA objects
+load("bashk.RDA")   #AO projections (automation)
+load("bashkNB.RDA") #NB projections (after savings)
+load("before_merging.RDA")  #un-gathered final data
+load("un_gathered.merged")  #merged
+
+load('data.RDA')    #gather final data (working horse)
+
+load('mapping.RDA') #area of NL fortified and merge (Geemente + Regio)
+
+load('nature.RDA')  #natural resource data (to be recoded)
+
+#Past wrangling (make the data frame in the correct format)
 #############
 #remove the last rows NA from gemeentenaam
 Data <- subset(data[2:408,])
@@ -45,11 +68,97 @@ final <- subset(final[, 2:166])
 #convert geementaname to a factor
 final$Gemeentenaam <- as.factor(final$Gemeentenaam)
 
-final <- repair_names(final)
+finall <- repair_names(final)
 #############
+
+#Update Municipalities
+######################
+
+#divide provinces from municipalities
+provinces <- subset(finall[395:406,])
+
+finall <- subset(finall[1:395,])
+
+#remove duplicate gemeentes
+finall %>% filter(!(Gemeentenaam == 'Zevenaar' | 
+                      Gemeentenaam == 'Leeuwarden' | 
+                      Gemeentenaam == 'Súdwest-Fryslân' |
+                      Gemeentenaam == 'Midden-Groningen*' | 
+                      Gemeentenaam == 'Westerwolde*' | 
+                      Gemeentenaam == 'Waadhoeke*')) -> finall
+
+#recode manually new merge municipalities and the ones with *
+finall$Gemeentenaam <- recode(finall$Gemeentenaam, 
+                             "Ten Boer" = "Groningen",
+                             'Haren' = 'Groningen',
+                             'Binnenmaas' = 'Hoeksche Waard',
+                             'Cromstrijen' = 'Hoeksche Waard',
+                             'Korendijk' = 'Hoeksche Waard' ,
+                             'Oud-Beijerland' = 'Hoeksche Waard' ,
+                             'Strijen' = 'Hoeksche Waard',
+                             'Leerdam' = 'Vijfheerenlanden',
+                             'Vianen' = 'Vijfheerenlanden',
+                             'Zederik' = 'Vijfheerenlanden',
+                             'Aalburg' = 'Altena',
+                             'Werkendam' = 'Altena',
+                             'Woudrichem' = 'Altena',
+                             'Nuth' = 'Beekdaelen',
+                             'Onderbanken' = 'Beekdaelen',
+                             'Schinnen' = 'Beekdaelen',
+                             'Haarlemmerliede' = 'Haarlemmermeer',
+                             'Spaarnwoude' = 'Haarlemmermeer',
+                             'Bedum' = 'Het Hogeland',
+                             'Eemsmond' = 'Het Hogeland',
+                             'Winsum' = 'Het Hogeland',
+                             'Grootegast' = 'Westerkwartier',
+                             'Leek' = 'Westerkwartier',
+                             'Marum' = 'Westerkwartier',
+                             'Zuidhorn' = 'Westerkwartier',
+                             'Giessenlanden' = 'Molenlanden',
+                             'Molenwaard' = 'Molenlanden',
+                             'Dongeradeel' = 'Noardeast-Fryslân',
+                             'Ferwerderadiel' = 'Noardeast-Fryslân',
+                             'Noordwijkerhout' = 'Noordwijk',
+                             'Geldermalsen' = 'West Betuwe',
+                             'Lingewaal' = 'West Betuwe',
+                             'Neerijnen' = 'West Betuwe',
+                             'Menterwolde' = 'Midden-Gronigen',
+                             'Hoogezand-Sappemeer' = 'Midden-Groningen',
+                             'Slochteren' = 'Midden-Groningen',
+                             'Franekeradeel' = 'Waadhoeke',
+                             "het Bildt" = 'Waadhoeke',
+                             'Menameradiel' = 'Waadhoeke',
+                             'Littenseradiel' = 'Waadhoeke',
+                             'Bellingwedde' = 'Westerwolde',
+                             'Vlagtwedde' = 'Westerwolde',
+                             'Leeuwarden*' = 'Leeuwarden',
+                             'Zevenaar*' = 'Zevenaar',
+                             'Súdwest-Fryslân*' = 'Súdwest-Fryslân')
+######################
+#de Marne Kollumerland, Nieuwkruisland = Missing
+
+#Sum up Municipalities & Merge
+##############################
+finall %>% group_by(Gemeentenaam) %>%  summarise_if(is.numeric, .funs = sum) -> ultimo
+
+#rename to have same column name
+plyr:: rename(ultimo, c("Gemeentenaam" = "Gemeentena")) -> ultimo
+
+#recode the gemeentes in the new data
+new_data$Gemeentena <- recode(new_data$Gemeentena,
+                              "'s-Gravenhage" = 'Den Haag')
+#merge new_data
+fundi <- merge(ultimo, new_data, by = "Gemeentena")
+##############################
 
 #AO projection + NB projections
 ###############################
+
+#split to portions and totals again
+fundi %>% select(contains("tot"), Gemeentena) -> plot
+
+fundi %>% select(-contains("tot"), Gemeentena) -> pjes
+
 #base year
 pjes %>% gather(ends_with("15_tj"), key = "baseYearAO", value = "prj15AO") %>% 
   select(Gemeentena, baseYearAO, prj15AO, GM_Code, Shape__Are, Shape__Len, Res_regio) -> a15
@@ -83,7 +192,7 @@ bashk <- rowr:: cbind.fill(bashk1, bashk4) %>%
 #Remove duplicate columns
 bashk %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, baseYearAO, 
                  prj15AO, AO20, prj20AO, AO25, prj25AO, AO30, prj30AO, AO40, prj40AO, 
-                 AO50,  prj50AO) -> bashk
+                 AO50,  prj50AO) -> bashkAO
 
 
 #NB projections per year
@@ -116,13 +225,12 @@ bashkNB <- rowr:: cbind.fill(bashk11, bashk44) %>%
   repair_names() 
 
 bashkNB %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, baseYearNB, 
-                 prj15NB, NB20, prj20NB, NB25, prj25NB, NB30, prj30NB, NB40, prj40NB, 
-                 NB50,  prj50NB) -> bashkNB
-
+                   prj15NB, NB20, prj20NB, NB25, prj25NB, NB30, prj30NB, NB40, prj40NB, 
+                   NB50,  prj50NB) -> bashkNB
 
 
 #final data NB + AO
-final_data <- cbind(bashk, bashkNB)
+final_data <- cbind(bashkAO, bashkNB)
 final_data <- repair_names(final_data)
 final_data %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, 
                       baseYearAO, prj15AO, AO20, prj20AO, AO25, prj25AO, AO30, 
@@ -131,95 +239,7 @@ final_data %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio,
                       NB40, prj40NB, NB50,  prj50NB) -> final_data
 ###############################
 
-#Update Municipalities
-######################
 
-final$Gemeentenaam <- recode(final$Gemeentenaam, 
-                             "Ten Boer" = "Groningen*",
-                             'Haren' = 'Groningen*',
-                             'Binnenmaas' = 'Hoeksche Waard',
-                             'Cromstrijen' = 'Hoeksche Waard',
-                             'Korendijk' = 'Hoeksche Waard' ,
-                             'Oud-Beijerland' = 'Hoeksche Waard' ,
-                             'Strijen' = 'Hoeksche Waard',
-                             'Leerdam' = 'Vijfheerenlanden',
-                             'Vianen' = 'Vijfheerenlanden',
-                             'Zederik' = 'Vijfheerenlanden',
-                             'Aalburg' = 'Altena',
-                             'Werkendam' = 'Altena',
-                             'Woudrichem' = 'Altena',
-                             'Nuth' = 'Beekdaelen',
-                             'Onderbanken' = 'Beekdaelen',
-                             'Schinnen' = 'Beekdaelen',
-                             'Haarlemmerliede' = 'Haarlemmermeer',
-                             'Spaarnwoude' = 'Haarlemmermeer',
-                             'Bedum' = 'Het Hogeland',
-                             'Eemsmond' = 'Het Hogeland',
-                             'Winsum' = 'Het Hogeland',
-                             'Grootegast' = 'Westerkwartier',
-                             'Leek' = 'Westerkwartier',
-                             'Marum' = 'Westerkwartier',
-                             'Zuidhorn' = 'Westerkwartier',
-                             'Giessenlanden' = 'Molenlanden',
-                             'Molenwaard' = 'Molenlanden',
-                             'Dongeradeel' = 'Noardeast-Frysl�n',
-                             'Ferwerderadiel' = 'Noardeast-Frysl�n',
-                             'Noordwijkerhout' = 'Noordwijk',
-                             'Geldermalsen' = 'West Betuwe',
-                             'Lingewaal' = 'West Betuwe',
-                             'Neerijnen' = 'West Betuwe')
-######################
-#de Marne is not in the data, Kollumerland, Nieuwkruisland as well
-
-#Sum up Municipalities and Merge
-################################
-final %>% group_by(Gemeentenaam) %>%  summarise_if(is.numeric, .funs = sum) -> ultimo
-
-#rename to have same column name
-plyr:: rename(ultimo, c("Gemeentenaam" = "Gemeentena")) -> ultimo
-
-#merge new_data
-fundi <- merge(ultimo, new_data, by = "Gemeentena")
-################################
-
-#split to portions and totals again
-fundi %>% select(contains("tot"), Gemeentena) -> plot
-
-fundi %>% select(-contains("tot"), Gemeentena) -> pjes
-
-
-#gather for 2040 e.g
-pjes %>% gather(ends_with("40AO_tj"), key = "AO40", value = "prj40AO") %>% 
-  select(Gemeentena, prj40AO, AO40)-> test
-
-
-
-
-g <- test %>%   
-  filter(Gemeentena == "Amsterdam") %>% 
-  mutate(fraction = round((prj40AO/ sum(prj40AO)), digits = 2)) %>%  
-  ggplot(aes(Gemeentena, fraction, fill = AO40)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(
-        x = element_blank(), 
-        y = element_blank()) +
-  guides(fill = guide_legend(title = "Energy sources", reverse = T)) +
-  theme(axis.ticks = element_blank(), 
-        panel.background = element_blank(),
-        axis.text.y = element_blank()) +
-  scale_fill_brewer(palette = "Spectral") + 
-  geom_text(aes(label = paste0(fraction, '%')), 
-            position=position_dodge(width=0.9), vjust=0) +
-  scale_y_continuous(labels = percent)
-
-tg <- grobTree(textGrob("Energy Potential Distribution (TJ) - 2050 AO", 
-                        y= 0.8, vjust=1, gp = gpar(fontsize=13, face=2, col="gray")),
-               textGrob("Amsterdam", y= -0.3, vjust= 0, gp = gpar(fontsize= 40, face=4, col="gray")),
-               cl="titlegrob")
-
-heightDetails.titlegrob <- function(x) do.call(sum,lapply(x$children, grobHeight))
-  
-grid.arrange(g, top = tg)
 
 
 

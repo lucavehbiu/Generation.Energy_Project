@@ -41,12 +41,12 @@ energy <- as.vector(final_data$AO20)
 ui <- dashboardPage( skin = "black",
                     
                     #UI header
-                    
                     dashboardHeader(
                         title = "Energy Demand - NL",
                         titleWidth = 260,
                         tags$li(class = "dropdown",
-                                tags$a(href= "http://generation.energy/", target="_blank", 
+                                tags$a(href= "http://generation.energy/", 
+                                       target="_blank", 
                                        tags$img(height = "25px", 
                                                 alt="SNAP Logo", 
                                                 src="https://media.licdn.com/dms/image/C4E0BAQEXSlDASA-1Lw/company-logo_400_400/0?e=1559174400&v=beta&t=OohUisMRQJXWuZoN31OYR5joBBA5l1IGuahWzR9fOR0")
@@ -57,35 +57,37 @@ ui <- dashboardPage( skin = "black",
                     dashboardSidebar(width = 260,
                       sidebarMenu(style = "position: fixed; 
                                   overflow: visible;
-                                  width: 260px;",
+                                  width: 260px;", #styling
+                                  
+                        #inputs for region         
                         selectizeInput(inputId = 'region', 
                                     label = 'Select Region:',
                                     choices = sort(region),
                                     selected = "Metropoolregio Eindhoven "),
                         
+                        #updated input within server (Region-City)
                         htmlOutput(outputId = "regioServer"),
                         
-                        
+                        #inputs for projection year
                         selectInput(inputId = "yearSelection",
                                     label = "Select Projection year:",
                                     choices = sort(year)),
-                      
+                        
+                        #inputs for kind of energy usage
                         selectInput(inputId = 'energy',
                                     label = 'Select kind of energy:',
                                     choices = sort(final_data$AO20),
                                     selected = F),
+                        br(),
                         helpText("Scroll Down"),
                         
+                        #numeric input for histogram
                         sliderInput('histo',
                                      'Choose Granularity',
                                      value = 100,
                                      min = 3,
                                      max = 300))),
-                    
-                       
-                    
-                    
-                    
+       
                      #Dashboard body
                      dashboardBody(
                        tags$head(tags$style(HTML(' 
@@ -95,64 +97,74 @@ ui <- dashboardPage( skin = "black",
                                                  position: fixed; 
                                                  overflow: visible;
                                                  width: 260px;
-                                                 }'))),
-                       
-
-                       
+                                                 }'))), #styling
+                        #first row of boxes
                         fluidRow(
                           splitLayout(cellWidths = c('50%', '50%'),
-                                  column(12, 
-                                    box(status = "success",
+                                      
+                                    column(12, 
+                                           box(status = "success",
                                         width = '100%',
                                         title = "Regio EnergieMix",
                                         solidHeader = T,
                                         height = 455,
                                       plotlyOutput("plotRegio"))),
-                                    column(12, box(width = '100%',
+                                  
+                                    column(12, 
+                                           box(width = '100%',
                                         solidHeader = T,
                                         height = 455,
                                         title = "Map of Regio/Geemente",
                                         status = "success",
                                       plotOutput("plotMap"))))),
                        
-
+                        #second row of boxes
                         fluidRow(splitLayout(cellWidths = c('50%', '32%', '18%'),
                                              
-                          column(12, box(width = '100%', 
+                          column(12, 
+                                 box(width = '100%', 
                               title = "Gemeente EnergieMix",
                               status = "success",
                               solidHeader = T,
                               height = 455,
                             plotOutput("plotGemeente"))),
-                          column(12, box(width = '100%',
-                                         status = "success",
+                          
+                          column(12, 
+                                 box(width = '100%',
+                              status = "success",
                               solidHeader = T,
                               title = "Gemeente",
                               plotlyOutput("plotNature"),
                               height = 455)),
+                          
+                          #third column containg Value Boxes
                           column(12,
                                  valueBox(1*125000 , "Population", icon = icon("male"),
                                    width = 20, color = "olive"),
                           
-                          valueBox(paste(1*845, "per m2") , "Density", icon = icon("building"),
+                          valueBox(1*845 , "Density per m²", icon = icon("building"),
                                    width = 20, color = "olive"),
+                          
                           valueBox(1*43 , "Average Age", icon = icon("hotel"),
                                    width = 20, color = "olive"))
                           )),
                        
-
-                        fluidRow(column(12, box(width = '100%',
-                                                status = "success",
+                        #Third row of boxes
+                        fluidRow(column(12, 
+                                        box(width = '100%',
+                                 status = "success",
                                  title = "Energy potential distriubtion per source/gemeente/region",
                                  solidHeader = T,
-                                 plotOutput("histoPlot"))))))
+                                 plotOutput("histoPlot"))))
+                       
+                       )) #brackets for closing header and body
 
 
+#Server side~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 server <- function(input, output) {
   
-  #Server inputs
-  
+  #Server input for city of a region
   output$regioServer <- renderUI({
     
     ultimo <- final_data %>% filter(Res_regio == input$region)
@@ -161,10 +173,6 @@ server <- function(input, output) {
                 label = "Select city from selected Region:",
                 choices = sort(unique(ultimo$Gemeentena)),
                 selected = "Asten")
-    
-
-
-    
   })
   
   
@@ -172,7 +180,9 @@ server <- function(input, output) {
   output$plotRegio <- renderPlotly({
     
     p <-  final_data %>%   
-      gather(starts_with("prj"), key = "Year", value = "projections") %>% 
+      gather(starts_with("prj"), 
+             key = "Year", 
+             value = "projections") %>% 
       filter(Res_regio == input$region,
              Year == input$yearSelection) %>% 
       group_by(Res_regio) %>% 
@@ -181,15 +191,21 @@ server <- function(input, output) {
       mutate(ymax = cumsum(fraction),
              ymin = c(0, head(ymax, n = -1))) 
     
+    #choose color theme
     colors = colorRampPalette(brewer.pal(10, "PuOr"))(100)[100*p$ymax]
     
-    
+    #plot the plotly chart
     p %>% 
-      plot_ly(labels = ~AO40, values = ~ymax, textinfo = "none", 
-              marker = list(colors = ~colors), name = "luca") %>%  
-      add_pie(hole = 0.82, pull = 0.06, direction = "clockwise") %>% 
-      layout(title = input$region,  showlegend = T,
-             titlefont = list(family = "Agency FB",
+      plot_ly(labels = ~AO40, 
+              values = ~ymax, 
+              textinfo = "none", 
+              marker = list(colors = ~colors)) %>%  
+      add_pie(hole = 0.82, 
+              pull = 0.06, 
+              direction = "clockwise") %>% 
+      layout(title = input$region,  
+             showlegend = T,
+             titlefont = list(family = "Raleway",
                               size = 20,
                               color = "gray"),
              legend = list(orientation = "v",
@@ -197,33 +213,39 @@ server <- function(input, output) {
                            y = 0.5,
                            x = 0.5,
                            font = list(size = 9, color = "gray")),
-             annotations = 
-               list(x = 1, y = -0.1, text = "Source: Generation.Energy", 
-                    showarrow = F, xref='paper', yref='paper', 
-                    xanchor='right', yanchor='auto', xshift=0, yshift=0,
+             annotations = list(x = 1, y = -0.1, 
+                                text = "Source: Generation.Energy", 
+                    showarrow = F, 
+                    xref='paper', 
+                    yref='paper', 
+                    xanchor='right', 
+                    yanchor='auto', 
+                    xshift=0, 
+                    yshift=0,
                     font=list(size=15, color="gray")))
-    
-
-
-    
-    #title for pie chart of regions
-  
     
   })
   
   #google maps plot
   output$plotMap <- renderPlot({
     
-    
     ggmap(sfMap) +
-      geom_polygon(data = area.fort %>% filter(Res_regio == input$region), 
-                   aes(fill = Res_regio, x = long, y = lat, group = group),
+      geom_polygon(data = area.fort %>% 
+                     filter(Res_regio == input$region), 
+                   aes(fill = Res_regio, 
+                       x = long, 
+                       y = lat, 
+                       group = group),
                    colour = "white",
                    alpha = 0.9,
                    size = 0.2) +
-      geom_polygon(data = area.fort %>% filter(Res_regio == input$region,
-                                               Gemeentena == input$citySelection),
-                   aes(fill = Gemeentena, x = long, y = lat, group = group),
+      geom_polygon(data = area.fort %>% 
+                     filter(Res_regio == input$region,
+                            Gemeentena == input$citySelection),
+                   aes(fill = Gemeentena, 
+                       x = long, 
+                       y = lat, 
+                       group = group),
                    size = 0.4) +
       scale_fill_manual(values = c("blue", "orange")) +
       labs(x = element_blank(),
@@ -239,26 +261,24 @@ server <- function(input, output) {
     grid.arrange(g,
                  bottom = textGrob("Source: Generation Energy",
                                    x = 1,
-                                   hjust = 1, gp = gpar(fontface = 3L, fontsize = 13)))
-    
-
-    
+                                   hjust = 1, 
+                                   gp = gpar(fontface = 3L, fontsize = 13)))
     
   })
-  
-  
- 
   
   #final_data[which(final_data$prj40AO > 0),]
   #Bar chart for gemeentes
   output$plotGemeente <- renderPlot({
     
   g <- final_data %>% 
-    gather(starts_with("prj"), key = "Year", value = "projections") %>% 
+    gather(starts_with("prj"), 
+           key = "Year", 
+           value = "projections") %>% 
     filter(Res_regio == input$region,
       Gemeentena == input$citySelection,
       Year == input$yearSelection) %>% 
-    mutate(fraction = round((projections/ sum(projections)), digits = 2) *100) %>% 
+    mutate(fraction = round((projections/ sum(projections)), 
+                            digits = 2) *100) %>% 
     ggplot(aes(Gemeentena, fraction, fill = AO40)) +
       geom_bar(stat = "identity", position = "dodge") +
       labs(title = input$citySelection,
@@ -297,6 +317,7 @@ server <- function(input, output) {
                 size = 4) +
       scale_y_continuous() +
     coord_flip() 
+  
   g
    
     
@@ -305,8 +326,7 @@ server <- function(input, output) {
     
     #natural resources pie chart
     output$plotNature <- renderPlotly({
-      
-      
+    
       g3 <- nature %>%   
         filter(Gemeentena == input$citySelection) %>% 
         mutate(fraction = surface / sum(surface)) %>% 
@@ -316,13 +336,13 @@ server <- function(input, output) {
         
         
         colors = colorRampPalette(brewer.pal(9, "Greens"))(100)[100*g3$ymax]
-        
-        
+      
        g3 %>% 
           plot_ly(labels = ~resource, values = ~ymax, textinfo = "none", 
                   marker = list(colors = ~colors)) %>%  
           add_pie(hole = 0.82, pull = 0.05) %>% 
-          layout(title = paste("Natural Resources",input$citySelection),  showlegend = T,
+          layout(title = paste("Natural Resources",input$citySelection),  
+                 showlegend = T,
                  titlefont = list(family = "Agency FB",
                                   size = 20,
                                   color = "gray"),
@@ -336,30 +356,31 @@ server <- function(input, output) {
                         showarrow = F, xref='paper', yref='paper', 
                         xanchor='right', yanchor='auto', xshift=0, yshift=0,
                         font=list(size=15, color="gray")))
-        
-        
-      
     })
     
     #histogram of energy sources distribution
-    
     output$histoPlot <- renderPlot({
-      
       
         ggplot() + 
         geom_histogram(data = final_data %>% 
-                         gather(starts_with("prj"), key = "Year", value = "projections") %>% 
+                         gather(starts_with("prj"), 
+                                key = "Year", 
+                                value = "projections") %>% 
                          filter(Year == input$yearSelection,
                                 AO20 == input$energy), 
                        aes(projections), bins = input$histo) +
         geom_histogram(data = final_data %>% 
-                         gather(starts_with("prj"), key = "Year", value = "projections") %>% 
+                         gather(starts_with("prj"), 
+                                key = "Year", 
+                                value = "projections") %>% 
                          filter(Year == input$yearSelection,
                                 AO20 == input$energy,
                                 Res_regio == input$region), 
                        aes(projections, fill = Res_regio), bins = input$histo) +
         geom_histogram(data = final_data %>% 
-                         gather(starts_with("prj"), key = "Year", value = "projections") %>% 
+                         gather(starts_with("prj"), 
+                                key = "Year", 
+                                value = "projections") %>% 
                          filter(Year == input$yearSelection,
                                 AO20 == input$energy,
                                 Res_regio == input$region,
@@ -379,15 +400,11 @@ server <- function(input, output) {
       grid.arrange(h,
                    bottom = textGrob("Source: Generation Energy",
                                      x = 1,
-                                     hjust = 1, gp = gpar(fontface = 3L, fontsize = 13)))
-      
-
-      
+                                     hjust = 1, 
+                                     gp = gpar(fontface = 3L, fontsize = 13)))
       
     })
     
-    
-  
   
 }
 

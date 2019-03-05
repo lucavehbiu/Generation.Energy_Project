@@ -18,11 +18,23 @@ require(spdep)
 require(rgeos)
 require(raster)
 require(sp)
-require(plotrix) #have not used p_load - fear of failure when deployed
+require(plotrix) 
+library(RColorBrewer)
+library(mapview)
+devtools::install_github('bbc/bbplot', force = T)#have not used p_load - fear of failure when deployed
+
+
+
 
 #Read and load the necessary data
 data <- import("180320_Klimaatmonitor_Energieverbruik_berekeningsmap_herindelingenmap_jtv.xlsx", 
-               sheet = 'TOTALEN_TJ') 
+               sheet = 'TOTALEN_TJ', skip = 2) 
+
+electric_tj.and.kwh <- import("180320_Klimaatmonitor_Energieverbruik_berekeningsmap_herindelingenmap_jtv.xlsx", 
+                              sheet = '2015_geind_nw_gem18_(m3-kwh)') 
+
+
+
 #big spreadsheet with energy potential demand projections (2015-2050)
 
 new_data <- read_csv("new_data.csv") 
@@ -32,7 +44,7 @@ new_data <- read_csv("new_data.csv")
 load("bashk.RDA")   #AO projections (automation)
 load("bashkNB.RDA") #NB projections (after savings)
 load("before_merging.RDA")  #un-gathered final data
-load("un_gathered.merged")  #merged
+load("un_gathered.merged.RDA")  #merged
 
 load('data.RDA')    #gather final data (working horse)
 
@@ -42,20 +54,9 @@ load('nature.RDA')  #natural resource data (to be recoded)
 
 #Past wrangling (make the data frame in the correct format)
 #############
-#remove the last rows NA from gemeentenaam
-Data <- subset(data[2:408,])
-
-#make the first row as headers
-header.true <- function(df) {
-  names(df) <- as.character(unlist(df[1,]))
-  df[-1,]
-}
-
-header.true(Data) -> final
-
 #convert everything to numeric
-data_factor <- subset(final[, 1:3])
-data_rem <- subset(final[, 4:166])
+data_factor <- subset(data[, 1:3])
+data_rem <- subset(data[, 4:166])
 
 data_rem[sapply(data_rem, is.character)] <- lapply(data_rem[sapply(data_rem, is.character)], 
                                                    as.numeric)
@@ -155,91 +156,66 @@ fundi <- merge(ultimo, new_data, by = "Gemeentena")
 ###############################
 
 #split to portions and totals again
-fundi %>% select(contains("tot"), Gemeentena) -> plot
+fundi %>% dplyr:: select(contains("tot"), Gemeentena) -> plot
 
-fundi %>% select(-contains("tot"), Gemeentena) -> pjes
+fundi %>% dplyr:: select(-contains("tot"), Gemeentena) -> pjes
+
+#remove residual heat
+pjes %>% dplyr:: select(-contains("rest")) -> pjes
 
 #base year
 pjes %>% gather(ends_with("15_tj"), key = "baseYearAO", value = "prj15AO") %>% 
-  select(Gemeentena, baseYearAO, prj15AO, GM_Code, Shape__Are, Shape__Len, Res_regio) -> a15
+  dplyr:: select(Gemeentena, prj15AO, GM_Code, Shape__Are, Shape__Len, Res_regio, baseYearAO) -> a15
 
 #AO projections per year
 pjes %>% gather(ends_with("50AO_tj"), key = "AO50", value = "prj50AO") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj50AO, AO50) -> a50
+  dplyr:: select(prj50AO, AO50) -> a50
 
 pjes %>% gather(ends_with("40AO_tj"), key = "AO40", value = "prj40AO") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj40AO, AO40)-> a40
+  dplyr:: select(prj40AO, AO40)-> a40
 
 pjes %>% gather(ends_with("30AO_tj"), key = "AO30", value = "prj30AO") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj30AO, AO30) -> a30
+  dplyr:: select(prj30AO, AO30) -> a30
 
 pjes %>% gather(ends_with("25AO_tj"), key = "AO25", value = "prj25AO") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj25AO, AO25)-> a25
+  dplyr:: select(prj25AO, AO25)-> a25
 
 pjes %>% gather(ends_with("20AO_tj"), key = "AO20", value = "prj20AO") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj20AO, AO20)-> a20
+  dplyr:: select(prj20AO, AO20)-> a20
 
 #bind the ones with equal observation
-bashk1 <- cbind(a15, a50)
-bashk2 <- cbind(a40, a30)
-bashk3 <- cbind(bashk2, a25)
-bashk4 <- cbind(bashk3, a20)
+do.call("cbind", list(a15, a20, a25, a30, a40, a50)) -> AOproj
 
-#all partional prjections into one dataset
-bashk <- rowr:: cbind.fill(bashk1, bashk4) %>% 
-  repair_names() #repair similar names for ease of column selection
-
-#Remove duplicate columns
-bashk %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, baseYearAO, 
-                 prj15AO, AO20, prj20AO, AO25, prj25AO, AO30, prj30AO, AO40, prj40AO, 
-                 AO50,  prj50AO) -> bashkAO
 
 
 #NB projections per year
 pjes %>% gather(ends_with("15_tj"), key = "baseYearNB", value = "prj15NB") %>% 
-  select(Gemeentena, baseYearNB, prj15NB, GM_Code, Shape__Are, Shape__Len, Res_regio) -> b15
+  dplyr:: select(prj15NB, baseYearNB) -> b15
 
 pjes %>% gather(ends_with("50NB_tj"), key = "NB50", value = "prj50NB") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj50NB, NB50) -> b50
+  dplyr:: select(prj50NB, NB50) -> b50
 
 pjes %>% gather(ends_with("40NB_tj"), key = "NB40", value = "prj40NB") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj40NB, NB40)-> b40
+  dplyr:: select(prj40NB, NB40)-> b40
 
 pjes %>% gather(ends_with("30NB_tj"), key = "NB30", value = "prj30NB") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj30NB, NB30) -> b30
+  dplyr:: select(prj30NB, NB30) -> b30
 
 pjes %>% gather(ends_with("25NB_tj"), key = "NB25", value = "prj25NB") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj25NB, NB25)-> b25
+  dplyr:: select(prj25NB, NB25)-> b25
 
 pjes %>% gather(ends_with("20NB_tj"), key = "NB20", value = "prj20NB") %>% 
-  select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, prj20NB, NB20)-> b20
+  dplyr:: select(prj20NB, NB20)-> b20
 
-#bind the ones with equal observation
-bashk11 <- cbind(b15, b50)
-bashk22 <- cbind(b40, b30)
-bashk33 <- cbind(bashk22, b25)
-bashk44 <- cbind(bashk33, b20)
-
-#all partional projections into one dataset
-bashkNB <- rowr:: cbind.fill(bashk11, bashk44) %>% 
-  repair_names() 
-
-bashkNB %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, baseYearNB, 
-                   prj15NB, NB20, prj20NB, NB25, prj25NB, NB30, prj30NB, NB40, prj40NB, 
-                   NB50,  prj50NB) -> bashkNB
+#bind em all
+do.call("cbind", list(b15, b20, b25, b30, b40, b50)) -> NBproj
 
 
 #final data NB + AO
-final_data <- cbind(bashkAO, bashkNB)
-final_data <- repair_names(final_data)
-final_data %>% select(Gemeentena, GM_Code, Shape__Are, Shape__Len, Res_regio, 
-                      baseYearAO, prj15AO, AO20, prj20AO, AO25, prj25AO, AO30, 
-                      prj30AO, AO40, prj40AO, AO50,  prj50AO, baseYearNB, 
-                      prj15NB, NB20, prj20NB, NB25, prj25NB, NB30, prj30NB, 
-                      NB40, prj40NB, NB50,  prj50NB) -> final_data
+final_data <- cbind(AOproj, NBproj)
+
 ###############################
-
-
+save(final_data, file = "data.RDA")
 
 
 

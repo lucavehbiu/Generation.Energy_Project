@@ -78,20 +78,6 @@ pop %>% group_by(Gemeentena) %>%  summarise_if(is.numeric, .funs = sum) -> pop
 merge(fundi, pop, by = "Gemeentena") %>% 
   select("Gemeentena", "Population", "Density", "Res_regio", "Age")-> regio_pop
 
-l <- list(color = toRGB("white"), width = 2)
-
-p <- plot_geo(area.fort, locationmode = 'Netherlands') %>%
-  add_trace(
-    z = ~Gemeentena, locations = ~ long
-   
-  ) %>%
-  layout(
-    title = '2011 US Agriculture Exports by State<br>(Hover for breakdown)',
-    geo = g
-  )
-p
-
-plot_ly(area.fort)
                          
                          
 

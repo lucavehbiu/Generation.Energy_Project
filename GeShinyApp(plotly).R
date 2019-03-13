@@ -1,36 +1,25 @@
-
+#Load Libraries
 library(shiny)
 library(shinydashboard)
 library(shinythemes)
 library(plotly)
-library(rio)
 library(dplyr)
 library(ggplot2)
 library(tidyverse)
-library(data.table)
 library(scales)
-library(grid)
-library(gridExtra)
 library(sf)
 library(rgdal)
-library(maptools)
-library(ggmap)
 library(RColorBrewer)
 library(leaflet)
-library(spData)
+library(spdep)
 
 
 #load objects
-load('data.RDA')    #gather final data (working horse)
-
-load('new.RDA')
-load('mapping.RDA') #area of NL fortified and merge (Geemente + Regio)
-load('NL_map.RDA') #map of NL from google
+load('data.RDA')    #final data (working horse)
+load('new.RDA')     #gementees with geometries
 load('nature.RDA')  #natural resource data recoded
 load('population.RDA') #population data recoded
 
-#list of all variables
-nms <- names(final_data)
 
 #list of municipalities names
 nmss <- as.vector(final_data$Gemeentena)
@@ -39,13 +28,17 @@ nmss <- as.vector(final_data$Gemeentena)
 region <- as.vector(final_data$Res_regio)
 
 #list of projection year variables
-year <- c("prj15AO",  "prj20AO",  "prj25AO", "prj30AO",  "prj40AO", "prj50AO",
-          "prj15NB",  "prj20NB",  "prj25NB", "prj30NB",  "prj40NB", "prj50NB")
+year <- c("2015AO" = "prj15AO", "2020AO" = "prj20AO",  
+          "2025AO" =  "prj25AO","2030AO" = "prj30AO",  
+          "2040AO" = "prj40AO", "2050AO" = "prj50AO",
+          "2015NB" =  "prj15NB", "2020NB" = "prj20NB",  
+          "2025NB" = "prj25NB","2030NB" = "prj30NB",  
+          "2040NB" = "prj40NB", "2050NB" = "prj50NB")
 
 #list of energy sources
 energy <- as.vector(final_data$AO50)
 
-
+#recode data to make it look fancier
 final_data$AO50 <- recode(final_data$AO50, 
                           "e_won50AO_tj" = "E_home",
                           "e_cdv50AO_tj" = "E_commerce",
@@ -97,7 +90,7 @@ ui <- dashboardPage( skin = "black",
                     ),
 
                     #Dashboard sidebar
-                    dashboardSidebar(tags$head(tags$style("#histoPlot{height:80vh !important;}}")),
+                    dashboardSidebar(tags$head(tags$style("#histoPlot{height:60vh !important;}}")),
                                      width = 260,
 
                                      
@@ -124,7 +117,7 @@ ui <- dashboardPage( skin = "black",
                                     label = 'Select kind of energy:',
                                     choices = sort(final_data$AO50),
                                     selected = F),
-                        helpText("Scroll Down"),
+                        helpText("  Scroll Down"),
                         
                         #numeric input for histogram
                         sliderInput('histo',
@@ -154,21 +147,23 @@ ui <- dashboardPage( skin = "black",
                         fluidRow(
                           splitLayout(cellWidths = c('50%', '50%'),
                                       
-                                    column(12, 
+                                    column(12,
                                            box(status = "success",
                                         width = '100%',
                                         title = "Regio EnergieMix",
                                         solidHeader = T,
                                         height = '100%',
                                       plotlyOutput("plotRegio"))),
-                                  
-                                    column(12, 
-                                           box(width = '100%',
-                                        height = '100%',
-                                        solidHeader = T,
-                                        title = "Regio/Gemeente Map",
-                                        status = "success",
-                                      leafletOutput("plotMap"))))),
+                                      
+                                   
+                                      box(status = "success",
+                                          width = '100%',
+                                          title = "Regio EnergieMix",
+                                          solidHeader = T,
+                                          height = '100%',
+                                        leafletOutput("plotMap"))
+                                      
+                                    )),
                        
                         #second row of boxes
                         fluidRow(splitLayout(cellWidths = c('50%', '32%', '18%'),
@@ -195,7 +190,9 @@ ui <- dashboardPage( skin = "black",
 
                           valueBoxOutput("densBox", width  =20),
                           
-                          valueBoxOutput("ageBox", width = 20)
+                          valueBoxOutput("ageBox", width = 20),
+                          
+                          valueBoxOutput("surfaceBox", width = 20)
                           ))),
                        
                        
@@ -247,6 +244,8 @@ server <- function(input, output) {
     #choose color theme
     colors = rev(colorRampPalette(brewer.pal(10, "RdBu"))(10))
     
+    
+    
     #plot the plotly chart
     p %>% 
       plot_ly(labels = ~AO50, 
@@ -264,15 +263,15 @@ server <- function(input, output) {
              legend = list(orientation = "v",
                            font = list(size = 14, color = "gray")),
              annotations = list(x = 1.3, y = -0.12, 
-                                text = "Source: Generation.Energy", 
-                    showarrow = F, 
-                    xref='paper', 
-                    yref='paper', 
-                    xanchor='right', 
-                    yanchor='auto', 
-                    xshift=0, 
-                    yshift=0,
-                    font=list(size=14, color="gray"))) 
+                                text = "Source: Generation.Energy (2019)", 
+                                showarrow = F, 
+                                xref='paper', 
+                                yref='paper', 
+                                xanchor='right', 
+                                yanchor='auto', 
+                                xshift=0, 
+                                yshift=0,
+                                font=list(size=14, color="gray"))) 
 
   })
   
@@ -298,11 +297,11 @@ server <- function(input, output) {
                                         Gemeentena == input$citySelection),
                   label = input$citySelection,
                   fillOpacity = 1,
-                  fillColor = ~factpal(Gemeentena)) 
+                  fillColor = ~factpal(Gemeentena),
+                  popup = ~paste(GM_Code)) 
     
   })
   
-  #final_data[which(final_data$prj40AO > 0),]
   #Bar chart for gemeentes
   output$plotGemeente <- renderPlotly({
 
@@ -313,9 +312,11 @@ server <- function(input, output) {
            value = "projections") %>% 
     filter(Gemeentena == input$citySelection,
       Year == input$yearSelection) %>% 
-    mutate(fraction = round((projections/ sum(projections)), 
+    mutate(Percentage = round((projections/ sum(projections)), 
                             digits = 2) *100) %>% 
-    ggplot(aes(Gemeentena, fraction, fill = AO50)) +
+    group_by(baseYearAO = substr(AO50, 1, 2)) %>% 
+    mutate(Score = sum(projections)) %>% 
+    ggplot(aes(Gemeentena, Percentage, fill = AO50)) +
       geom_bar(stat = "identity", position = "dodge") +
       guides(fill = guide_legend(title = element_blank()), reverse = T) +
       theme(
@@ -328,11 +329,15 @@ server <- function(input, output) {
                                        size = 9),
             legend.direction = "vertical") +
       scale_y_continuous() +
-    scale_fill_brewer(palette = "RdBu", direction = -1)
+    scale_fill_brewer(palette = "RdBu", direction = -1) +
+    stat_summary(fun.y = sum, aes(label = ..y.., group = Score), 
+                 geom = "text", 
+                 position = position_dodge(width = .95), 
+                 color = c("red", "blue"))
   
   
   ggplotly(g) %>% layout(xaxis = list(title = ""),
-                         yaxis = list(title = "")) 
+                         yaxis = list(title = input$yearSelection)) 
     
   })
     
@@ -370,10 +375,10 @@ server <- function(input, output) {
                                x = 0.5,
                                font = list(size = 14, color = "gray")),
                  annotations = 
-                   list(x = 1, y = -0.125, text = "Source: CBS", 
+                   list(x = 1, y = -0.125, text = "Source: CBS (2016)", 
                         showarrow = F, xref='paper', yref='paper', 
                         xanchor='right', yanchor='auto', xshift=0, yshift=0,
-                        font=list(size=15, color="gray")))
+                        font=list(size=14, color="gray")))
     })
     
     #value box outputs - population
@@ -396,6 +401,7 @@ server <- function(input, output) {
       
     })
     
+    #energy density for square km
     output$ageBox <- renderValueBox({
       
         e_dens = merge(final_data, regio_pop, by = "Gemeentena") %>% 
@@ -412,6 +418,21 @@ server <- function(input, output) {
       
       
     })
+    
+    #for surface by gementeena
+    output$surfaceBox <- renderValueBox({
+      
+      new %>% 
+        mutate(Shape__Are = round(Shape__Are/1000000, 1)) %>% 
+        filter(Gemeentena == input$citySelection) -> neww
+      
+      valueBox(paste(neww$Shape__Are, "km²"), "Surface",
+               icon = icon("earth"),
+               color = "olive")
+      
+    })
+    
+    
     
     #histogram of energy sources distribution
     output$histoPlot <- renderPlotly({
@@ -452,8 +473,7 @@ server <- function(input, output) {
               axis.title.x = element_text(size = 20, colour = "gray"),
               axis.title.y = element_text(size = 20, colour = "gray"),
               legend.title = element_blank()) +
-        scale_fill_manual(values = c("red", "blue"), element_blank()) +
-        xlim(0,900) -> h
+        scale_fill_manual(values = c("red", "blue"), element_blank()) -> h
       
      ggplotly(h) %>% 
        layout(
@@ -462,7 +482,8 @@ server <- function(input, output) {
                                size = 18,
                                color = "gray"),
               legend = list(x = 0.66, y = 0.95,
-                            font = list(size = 26, color = "gray")),
+                            font = list(size = 26, color = "gray"),
+                            title = "mhonkrekarin"),
               annotations = list(x = 2, y = -0.1, 
                                  text = "Source: Generation.Energy", 
                                  showarrow = F, 

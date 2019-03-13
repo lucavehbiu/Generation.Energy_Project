@@ -13,5 +13,5 @@ _Does Amsterdam (e.g) have the space for transitioning to a 'green' city by 2040
    - To create 'live' graphs for all data mentioned above
    
    
-- Branch (Boxtel_shinyapp_versions) -> Application showing information onyl for the municipality of **Boxtel** (Regio Nord Brabant)
+- Boxtel Server & UI -> Application showing information only for the municipality of **Boxtel** (Regio Nord Brabant)
 - timeSeries.R -> Attempt at **forecasting** future energy demand

@@ -10,10 +10,10 @@ _Does Amsterdam (e.g) have the space for transitioning to a 'green' city by 2040
                          MVP
 - GEShinyapp.R -> Creating **the interactive dashboard**:
    - To provide insights for all municipalities in the _Netherlands_
-   - To create 'live' graphs for all data mentioned above
+   - To provide insights for one Municipality in detail
+   - To create 'live' interactive graphs for all data mentioned above
    
    
-- Boxtel Server & UI -> Application showing information only for the municipality of **Boxtel** (Regio Nord Brabant)
 - timeSeries.R -> Attempt at **forecasting** future energy demand
 
-<a id = "https://lucavehbiu.shinyapps.io/FinalProject/" </a>
+<a id = "https://lucavehbiu.shinyapps.io/FinalProject/"> </a>

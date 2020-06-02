@@ -1,6 +1,6 @@
 # Spatial intelligence for the Energy Transition (Shiny App)
 
-## _Does Amsterdam (e.g) have the space for transitioning to a 'green' city by 2040?_
+#### _Does Amsterdam (e.g) have the space for transitioning to a 'green' city by 2040?_
 
 - DataWrangling.R -> Pulling the neccesary data from _KlimaatMonitor_ and manipulating it
 - Shapefiles.R -> Working with geospatial data (due manipulations)

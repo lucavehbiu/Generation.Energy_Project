@@ -16,4 +16,4 @@ _Does Amsterdam (e.g) have the space for transitioning to a 'green' city by 2040
    
 - timeSeries.R -> Attempt at **forecasting** future energy demand
 
-<href "https://lucavehbiu.shinyapps.io/FinalProject/" > </href>
+[Shiny App]("https://lucavehbiu.shinyapps.io/FinalProject/")

@@ -16,4 +16,4 @@
    
 - timeSeries.R -> Attempt at **forecasting** future energy demand
 
-[Shiny App]("https://lucavehbiu.shinyapps.io/FinalProject/")
+You can see the [Shiny App](https://lucavehbiu.shinyapps.io/FinalProject/) here
